@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
-operation_list = ["write", "randwrite", "read", "randread"]
+operation_list = ["write", "read", "randread"]
 max_open_zones_list = [1, 2, 4, 8, 14]
-queue_depth_list = [1, 2, 4, 8, 14, 32, 64] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
-block_size_list = ["4K", "8K", "16K", "64K", "128K"]
+#max_open_zones_list = range(1,33)
+queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
+#queue_depth_list = range(1,33)
+block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
 block_size_K_list = [str(x[:-1]) for x in block_size_list]
 
 class BenchPlot(Plot):
@@ -50,6 +52,7 @@ class BenchPlot(Plot):
         y_values_QD4 = [-1] * len(x_ticks)
         y_values_QD8 = [-1] * len(x_ticks)
         y_values_QD14 = [-1] * len(x_ticks)
+        y_values_QD16 = [-1] * len(x_ticks)
         y_values_QD32 = [-1] * len(x_ticks)
         y_values_QD64 = [-1] * len(x_ticks)
         for row in benchmarkRows:
@@ -64,6 +67,8 @@ class BenchPlot(Plot):
                     y_values_QD8[x_ticks.index(row['block_size_K'])] = int(row[value_of_interest])
                 elif row['queue_depth'] == "14":
                     y_values_QD14[x_ticks.index(row['block_size_K'])] = int(row[value_of_interest])
+                elif row['queue_depth'] == "16":
+                    y_values_QD16[x_ticks.index(row['block_size_K'])] = int(row[value_of_interest])
                 elif row['queue_depth'] == "32":
                     y_values_QD32[x_ticks.index(row['block_size_K'])] = int(row[value_of_interest])
                 elif row['queue_depth'] == "64":
@@ -87,6 +92,8 @@ class BenchPlot(Plot):
             plt.plot(x_values, y_values_QD8, '-bd', label=("QD=8%s" % label_additions) )
         if -1 not in y_values_QD14:
             plt.plot(x_values, y_values_QD14, '-rx', label=("QD=14%s" % label_additions) )
+        if -1 not in y_values_QD16:
+            plt.plot(x_values, y_values_QD16, '-rx', label=("QD=16%s" % label_additions) )
         if -1 not in y_values_QD32:
             plt.plot(x_values, y_values_QD32, '-c8', label=("QD=32%s" % label_additions) )
         if -1 not in y_values_QD64:
@@ -177,20 +184,18 @@ class Run(Bench):
             sys.exit(1)
 
         #write/read 2 zones for this benchmark
-        size = zonesize * 2
+        size = "2z"
         runs = 2
-        max_size = int(((self.get_dev_size(dev) * zonecap) / 100) * 2)
-        if max_size < size:
-            size = max_size
-        io_size = size
+        dev_max_open_zones = self.get_number_of_max_open_zones(dev)
 
         for operation in operation_list:
             tmp_max_open_zones_list = max_open_zones_list
             if "read" in operation:
                 tmp_max_open_zones_list = [1]
+                extra = ""
                 print("About to prep the drive for read job")
                 self.discard_dev(dev)
-                init_param = ("--ioengine=io_uring --direct=1 --zonemode=zbd"
+                init_param = ("--ioengine=psync --direct=1 --zonemode=zbd"
                             " --output-format=json"
                             " --max_open_zones=2"
                             " --filename=%s "
@@ -198,7 +203,7 @@ class Run(Bench):
                             " %s") %  (dev, extra)
 
                 prep_param = ("--name=prep "
-                            " --size=%sM"
+                            " --size=%s"
                             " --output output/%s_prep.log") % (size, operation)
 
                 fio_param = "%s %s" % (init_param, prep_param)
@@ -207,8 +212,15 @@ class Run(Bench):
                 print("Finished preping the drive")
 
             for max_open_zones in tmp_max_open_zones_list:
+                tmp_queue_depth_list = queue_depth_list
+                if "read" in operation:
+                    tmp_queue_depth_list = [1, 2, 4, 8, 16, 32, 64]
+
                 for queue_depth in queue_depth_list:
                     if max_open_zones > queue_depth:
+                        continue
+
+                    if max_open_zones > dev_max_open_zones:
                         continue
 
                     if "write" in operation and queue_depth > max_open_zones:
@@ -216,24 +228,44 @@ class Run(Bench):
 
                     for block_size in block_size_list:
                         for run in range(1, runs+1):
+                            extra = ""
+                            original_size = size
+
+                            if "write_wrong_way" == operation:
+                                size="24z"
+                                operation = "write"
+                                extra = ("--offset_increment=24z --job_max_open_zone=%s --numjobs=1 --ramp_time=15 --runtime=30 --group_reporting" % (str(queue_depth)))
+
                             output_name = ("%s-%s-%s-%s-%s-%sof%s") % (operation, max_open_zones, queue_depth, block_size, self.jobname, run, runs)
+
+                            original_operation = operation
+                            original_queue_depth = queue_depth
+                            if "write" == operation:
+                                size="24z"
+                                extra = ("--offset_increment=24z --job_max_open_zone=1 --numjobs=%s --ramp_time=15 --runtime=30 --group_reporting" % (str(queue_depth)))
+                                queue_depth = 1
+
                             print("About to start job %s" % output_name)
                             if "write" in operation:
                                 self.discard_dev(dev)
-                            init_param = ("--ioengine=io_uring --direct=1 --zonemode=zbd"
+
+                            init_param = ("--ioengine=psync --direct=1 --zonemode=zbd"
                                         " --output-format=json"
                                         " --max_open_zones=%s"
                                         " --filename=%s "
                                         " --rw=%s --bs=%s --iodepth=%s"
                                         " %s") % (max_open_zones, dev, operation, block_size, queue_depth, extra)
 
+                            queue_depth = original_queue_depth
+                            operation = original_operation
                             exec_param = ("--name=%s "
-                                        " --size=%sM"
+                                        " --size=%s"
                                         " --percentile_list=1:5:10:20:30:40:50:60:70:80:90:99:99.9:99.99:99.999:99.9999:99.99999:100"
                                         " --output output/%s.log") % (operation, size, output_name)
                             fio_param = "%s %s" % (init_param, exec_param)
 
                             self.run_cmd(dev, container, 'fio', fio_param)
+                            size = original_size
                             print("Finished job")
 
     def teardown(self, dev, container):
@@ -403,7 +435,11 @@ class Run(Bench):
                     if "write" in operation:
                         plot.generatePercentileGraph({"operation": operation, "block_size_K": block_size_K, "max_open_zones": str(max_open_zones)})
 
-                for queue_depth in queue_depth_list:
+                tmp_queue_depth_list = queue_depth_list
+                if "read" in operation:
+                    tmp_queue_depth_list = [1, 2, 4, 8, 16, 32, 64]
+
+                for queue_depth in tmp_queue_depth_list:
                     plot.generatePercentileGraph({"operation": operation, "block_size_K": block_size_K, "queue_depth": str(queue_depth)})
 
         print("  Done generateing graphs")

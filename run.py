@@ -43,6 +43,30 @@ def check_and_set_scheduler(dev):
 
     print("Check OK: %s has been configured to use the 'mq-deadline' scheduler" % dev)
 
+def check_and_disable_scheduler(dev):
+    devname = dev.strip('/dev/')
+
+    with open('/sys/block/%s/queue/scheduler' % devname, 'r') as f:
+        res = f.readline()
+
+    if "[none]" in res:
+        print("Check OK: %s is set with 'none' scheduler" % dev)
+        return
+
+    if "[mq-deadline]" in res:
+        with open('/sys/block/%s/queue/scheduler' % devname, 'w') as f:
+            f.write("none")
+
+    with open('/sys/block/%s/queue/scheduler'% devname, 'r') as f:
+        res = f.readline()
+
+    if "[none]" not in res:
+        print("Check FAIL: %s does not support none scheduler" % dev)
+        sys.exit(1)
+
+    print("Check OK: %s has been configured to use the 'none' scheduler" % dev)
+
+
 def check_dev_string(dev):
     m = re.search('^/dev/\w+$', dev)
 
@@ -112,7 +136,8 @@ def run_benchmarks(dev, container, benches, run_output):
     # Verify that we're not about to destroy data unintended.
     check_dev_string(dev)
     check_dev_mounted(dev)
-    check_and_set_scheduler(dev)
+    #check_and_set_scheduler(dev)
+    check_and_disable_scheduler(dev)
     check_dev_zoned(dev)
     check_missing_programs(container, benches)
 
