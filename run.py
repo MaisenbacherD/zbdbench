@@ -136,8 +136,8 @@ def run_benchmarks(dev, container, benches, run_output):
     # Verify that we're not about to destroy data unintended.
     check_dev_string(dev)
     check_dev_mounted(dev)
-    #check_and_set_scheduler(dev)
-    check_and_disable_scheduler(dev)
+    check_and_set_scheduler(dev)
+    #check_and_disable_scheduler(dev)
     check_dev_zoned(dev)
     check_missing_programs(container, benches)
 

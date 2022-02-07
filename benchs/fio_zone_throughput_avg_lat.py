@@ -8,7 +8,7 @@ from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
 operation_list = ["write", "read", "randread"]
-max_open_zones_list = [1, 2, 4, 8, 14]
+max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
 #max_open_zones_list = range(1,33)
 queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 #queue_depth_list = range(1,33)
@@ -184,23 +184,23 @@ class Run(Bench):
             sys.exit(1)
 
         #write/read 2 zones for this benchmark
-        size = "2z"
-        runs = 2
+        size = "24z"
+        runs = 1
         dev_max_open_zones = self.get_number_of_max_open_zones(dev)
 
         for operation in operation_list:
             tmp_max_open_zones_list = max_open_zones_list
             if "read" in operation:
-                tmp_max_open_zones_list = [1]
-                extra = ""
+                #tmp_max_open_zones_list = [1]
+                extra = ''
                 print("About to prep the drive for read job")
                 self.discard_dev(dev)
-                init_param = ("--ioengine=psync --direct=1 --zonemode=zbd"
+                init_param = ("--ioengine=io_uring --direct=1 --zonemode=zbd"
                             " --output-format=json"
-                            " --max_open_zones=2"
                             " --filename=%s "
+                            " --offset_increment=24z --job_max_open_zone=1 --numjobs=%s --group_reporting"
                             " --rw=write --bs=64K --iodepth=4"
-                            " %s") %  (dev, extra)
+                            " %s") %  (dev, dev_max_open_zones, extra)
 
                 prep_param = ("--name=prep "
                             " --size=%s"
@@ -212,9 +212,9 @@ class Run(Bench):
                 print("Finished preping the drive")
 
             for max_open_zones in tmp_max_open_zones_list:
-                tmp_queue_depth_list = queue_depth_list
-                if "read" in operation:
-                    tmp_queue_depth_list = [1, 2, 4, 8, 16, 32, 64]
+                #tmp_queue_depth_list = queue_depth_list
+                #if "read" in operation:
+                #    tmp_queue_depth_list = [1, 2, 4, 8, 16, 32, 64]
 
                 for queue_depth in queue_depth_list:
                     if max_open_zones > queue_depth:
@@ -223,49 +223,35 @@ class Run(Bench):
                     if max_open_zones > dev_max_open_zones:
                         continue
 
-                    if "write" in operation and queue_depth > max_open_zones:
+                    #if "write" in operation and queue_depth > max_open_zones:
+                    if queue_depth > max_open_zones:
                         continue
 
                     for block_size in block_size_list:
                         for run in range(1, runs+1):
-                            extra = ""
-                            original_size = size
-
-                            if "write_wrong_way" == operation:
-                                size="24z"
-                                operation = "write"
-                                extra = ("--offset_increment=24z --job_max_open_zone=%s --numjobs=1 --ramp_time=15 --runtime=30 --group_reporting" % (str(queue_depth)))
-
+                            extra = ''
                             output_name = ("%s-%s-%s-%s-%s-%sof%s") % (operation, max_open_zones, queue_depth, block_size, self.jobname, run, runs)
-
-                            original_operation = operation
-                            original_queue_depth = queue_depth
-                            if "write" == operation:
-                                size="24z"
-                                extra = ("--offset_increment=24z --job_max_open_zone=1 --numjobs=%s --ramp_time=15 --runtime=30 --group_reporting" % (str(queue_depth)))
-                                queue_depth = 1
 
                             print("About to start job %s" % output_name)
                             if "write" in operation:
                                 self.discard_dev(dev)
 
-                            init_param = ("--ioengine=psync --direct=1 --zonemode=zbd"
+                            init_param = ("--ioengine=io_uring --direct=1 --zonemode=zbd"
                                         " --output-format=json"
                                         " --max_open_zones=%s"
                                         " --filename=%s "
-                                        " --rw=%s --bs=%s --iodepth=%s"
+                                        " --rw=%s --bs=%s --iodepth=64"
+                                        " --offset_increment=24z --job_max_open_zone=1 --numjobs=%s --ramp_time=15 --runtime=30 --group_reporting"
                                         " %s") % (max_open_zones, dev, operation, block_size, queue_depth, extra)
 
-                            queue_depth = original_queue_depth
-                            operation = original_operation
                             exec_param = ("--name=%s "
                                         " --size=%s"
+                                        " --time_based"
                                         " --percentile_list=1:5:10:20:30:40:50:60:70:80:90:99:99.9:99.99:99.999:99.9999:99.99999:100"
                                         " --output output/%s.log") % (operation, size, output_name)
                             fio_param = "%s %s" % (init_param, exec_param)
 
                             self.run_cmd(dev, container, 'fio', fio_param)
-                            size = original_size
                             print("Finished job")
 
     def teardown(self, dev, container):
