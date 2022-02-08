@@ -335,7 +335,10 @@ class Run(Bench):
                     csv_row = []
                     csv_row.append(options[0])
                     csv_row.append(globalOptions['max_open_zones'])
-                    csv_row.append(globalOptions['iodepth'])
+                    iodepth = int(1)
+                    if 'iodepth' in globalOptions:
+                        iodepth = int(globalOptions['iodepth'])
+                    csv_row.append(iodepth)
                     #Cut SI prefix from bs for further processing
                     csv_row.append(re.sub('[a-zA-Z]', '', globalOptions['bs']))
                     csv_row.append(avg_lat_us)
