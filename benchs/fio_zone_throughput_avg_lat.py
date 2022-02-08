@@ -12,8 +12,10 @@ operation_list = ["read"]
 max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
 max_open_zones_list = [1, 2, 4, 8, 14]
 max_open_zones_list = range(1,33)
+max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64, 128]
 queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 queue_depth_list = range(1,33)
+queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
 block_size_K_list = [str(x[:-1]) for x in block_size_list]
 
@@ -221,8 +223,8 @@ class Run(Bench):
                     if max_open_zones > queue_depth:
                         continue
 
-                    if max_open_zones > dev_max_open_zones:
-                        continue
+                    #if max_open_zones > dev_max_open_zones:
+                    #    continue
 
                     if "write" in operation and queue_depth > max_open_zones:
                         continue
@@ -244,7 +246,7 @@ class Run(Bench):
                                 runtime = "15"
 
                             if "read" == operation or "write" == operation:
-                                extra = " --offset_increment=%s --job_max_open_zone=1 --numjobs=%s --group_reporting "  % (size, queue_depth)
+                                extra = " --offset_increment=%s --numjobs=%s --group_reporting "  % (size, queue_depth)
 
                             print("About to start job %s" % output_name)
                             if "write" in operation:
@@ -255,7 +257,7 @@ class Run(Bench):
                                         " --max_open_zones=%s"
                                         " --filename=%s"
                                         " --rw=%s --bs=%s"
-                                        " %s") % (ioengine, max_open_zones, dev, operation, block_size, extra)
+                                        " %s") % (ioengine, str("14"), dev, operation, block_size, extra)
 
                             exec_param = ("--name=%s "
                                         " --size=%s"
