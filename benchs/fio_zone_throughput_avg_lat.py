@@ -185,7 +185,7 @@ class Run(Bench):
             sys.exit(1)
 
         #write/read 2 zones for this benchmark
-        size = "128z"
+        size = "9z"
         runs = 1
         dev_max_open_zones = self.get_number_of_max_open_zones(dev)
 
@@ -238,8 +238,8 @@ class Run(Bench):
                                 ioengine = "io_uring"
                                 runtime = "15"
 
-                            if "write" == operation:
-                                extra = " --offset_increment=24z --job_max_open_zone=1 --numjobs=%s --group_reporting "  % queue_depth
+                            if "read" == operation or "write" == operation:
+                                extra = " --offset_increment=%s --job_max_open_zone=1 --numjobs=%s --group_reporting "  % (size, queue_depth)
 
                             print("About to start job %s" % output_name)
                             if "write" in operation:
