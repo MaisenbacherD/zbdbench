@@ -8,7 +8,6 @@ from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
 operation_list = ["write", "read", "randread"]
-operation_list = ["read", "randread"]
 max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
 max_open_zones_list = [1, 2, 4, 8, 14]
 #max_open_zones_list = range(1,33)
@@ -215,9 +214,6 @@ class Run(Bench):
                 print("Finished preping the drive")
 
             for max_open_zones in tmp_max_open_zones_list:
-                #tmp_queue_depth_list = queue_depth_list
-                #if "read" in operation:
-                #    tmp_queue_depth_list = [1, 2, 4, 8, 16, 32, 64]
 
                 for queue_depth in queue_depth_list:
                     if max_open_zones > queue_depth:
@@ -237,10 +233,10 @@ class Run(Bench):
                             ioengine = "psync"
                             runtime = "30"
                             ramptime = "15"
+                            extra = " --iodepth=%s " % queue_depth
                             if "randread" == operation:
                                 ioengine = "io_uring"
                                 runtime = "15"
-                                extra = " --iodepth=%s " % queue_depth
 
                             if "write" == operation:
                                 extra = " --offset_increment=24z --job_max_open_zone=1 --numjobs=%s --group_reporting "  % queue_depth
