@@ -188,7 +188,8 @@ class Run(Bench):
             sys.exit(1)
 
         #write/read 2 zones for this benchmark
-        size = "20z"
+        # 640 zones are beeing used
+        size = "5z"
         runs = 1
         dev_max_open_zones = self.get_number_of_max_open_zones(dev)
 
@@ -337,7 +338,8 @@ class Run(Bench):
                     globalOptions = data['global options']
                     csv_row = []
                     csv_row.append(options[0])
-                    csv_row.append(globalOptions['max_open_zones'])
+                    csv_row.append(globalOptions['numjobs'])
+                    #csv_row.append(globalOptions['max_open_zones'])
                     iodepth = int(1)
                     if 'iodepth' in globalOptions:
                         iodepth = int(globalOptions['iodepth'])
