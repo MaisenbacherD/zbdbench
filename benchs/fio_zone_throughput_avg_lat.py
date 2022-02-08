@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
-operation_list = ["write", "read", "randread"]
+operation_list = ["read", "randread", "write"]
 max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
 max_open_zones_list = [1, 2, 4, 8, 14]
 #max_open_zones_list = range(1,33)
@@ -238,7 +238,10 @@ class Run(Bench):
                                 ioengine = "io_uring"
                                 runtime = "15"
 
-                            if "read" == operation or "write" == operation:
+                            if "read" == operation:
+                                ioengine = "io_uring"
+
+                            if "write" == operation:
                                 extra = " --offset_increment=%s --job_max_open_zone=1 --numjobs=%s --group_reporting "  % (size, queue_depth)
 
                             print("About to start job %s" % output_name)
