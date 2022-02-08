@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
-operation_list = ["write", "read", "randread"]
+operation_list = ["read", "randread", "write"]
+#TODO: rename max_open_zones_list to parallel_jobs_list
 max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
 max_open_zones_list = [1, 2, 4, 8, 14]
 #max_open_zones_list = range(1,33)
@@ -193,7 +194,8 @@ class Run(Bench):
             tmp_max_open_zones_list = max_open_zones_list
 
             if "read" in operation:
-                tmp_max_open_zones_list = [1]
+                if "randread" == operation:
+                    tmp_max_open_zones_list = [1]
                 extra = ''
                 print("About to prep the drive for read job")
                 self.discard_dev(dev)
