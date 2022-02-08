@@ -196,6 +196,8 @@ class Run(Bench):
             if "read" in operation:
                 if "randread" == operation:
                     tmp_max_open_zones_list = [1]
+                if "read" == operation:
+                    tmp_max_open_zones_list = [14]
                 extra = ''
                 print("About to prep the drive for read job")
                 self.discard_dev(dev)
@@ -218,16 +220,13 @@ class Run(Bench):
             for max_open_zones in tmp_max_open_zones_list:
 
                 for queue_depth in queue_depth_list:
-                    if max_open_zones > queue_depth:
+                    if "read" not in operation and max_open_zones > queue_depth:
                         continue
 
                     if max_open_zones > dev_max_open_zones:
                         continue
 
                     if "write" in operation and queue_depth > max_open_zones:
-                        continue
-
-                    if "read" in operation and queue_depth > max_open_zones:
                         continue
 
                     for block_size in block_size_list:
@@ -243,8 +242,12 @@ class Run(Bench):
                                 ioengine = "io_uring"
                                 runtime = "15"
 
-                            if "read" == operation or "write" == operation:
+                            if "write" == operation:
                                 extra = " --offset_increment=%s --job_max_open_zone=1 --numjobs=%s --group_reporting "  % (size, queue_depth)
+
+
+                            if "read" == operation:
+                                extra = " --offset_increment=%s --numjobs=%s --group_reporting "  % (size, queue_depth)
 
                             print("About to start job %s" % output_name)
                             if "write" in operation:
