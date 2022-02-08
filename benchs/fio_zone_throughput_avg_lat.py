@@ -227,6 +227,9 @@ class Run(Bench):
                     if "write" in operation and queue_depth > max_open_zones:
                         continue
 
+                    if "read" in operation and queue_depth > max_open_zones:
+                        continue
+
                     for block_size in block_size_list:
                         for run in range(1, runs+1):
                             extra = ''
