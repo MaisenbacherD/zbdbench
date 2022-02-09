@@ -7,15 +7,15 @@ import matplotlib.pyplot as plt
 from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
-operation_list = ["read"]
+operation_list = ["read", "randread"]
 #TODO: rename max_open_zones_list to parallel_jobs_list
 max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
 max_open_zones_list = [1, 2, 4, 8, 14]
 max_open_zones_list = range(1,33)
-max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64, 128]
+max_open_zones_list = [1, 2, 4, 8, 16, 32, 64, 128]
 queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 queue_depth_list = range(1,33)
-queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
+queue_depth_list = [1, 2, 4, 8, 16, 32, 64, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
 block_size_K_list = [str(x[:-1]) for x in block_size_list]
 
@@ -189,7 +189,7 @@ class Run(Bench):
 
         #write/read 2 zones for this benchmark
         # 640 zones are beeing used
-        size = "5z"
+        size = "4z"
         runs = 1
         dev_max_open_zones = self.get_number_of_max_open_zones(dev)
 
@@ -197,21 +197,21 @@ class Run(Bench):
             tmp_max_open_zones_list = max_open_zones_list
 
             if "read" in operation:
-                if "randread" == operation:
-                    tmp_max_open_zones_list = [1]
+                #if "randread" == operation:
+                #    tmp_max_open_zones_list = [1]
                 extra = ''
                 print("About to prep the drive for read job")
                 self.discard_dev(dev)
                 init_param = ("--ioengine=psync --direct=1 --zonemode=zbd"
                             " --output-format=json"
                             " --filename=%s "
-                            " --offset_increment=20z --job_max_open_zone=1 --max_open_zones=14 --numjobs=32 --group_reporting"
+                            " --offset_increment=10z --job_max_open_zone=1 --max_open_zones=14 --numjobs=14 --group_reporting"
                             " --rw=write --bs=128K"
                             " %s") %  (dev, extra)
 
                 prep_param = ("--name=prep "
                             " --size=%s"
-                            " --output output/%s_prep.log") % (str("20z"), operation)
+                            " --output output/%s_prep.log") % (str("10z"), operation)
 
                 fio_param = "%s %s" % (init_param, prep_param)
 
@@ -233,6 +233,9 @@ class Run(Bench):
                     if "read" in operation and queue_depth > max_open_zones:
                         continue
 
+                    if "read" == operation and queue_depth > 32:
+                        continue
+
                     for block_size in block_size_list:
                         for run in range(1, runs+1):
                             extra = ''
@@ -242,9 +245,11 @@ class Run(Bench):
                             runtime = "15"
                             ramptime = "7"
                             extra = " --iodepth=%s " % queue_depth
+                            original_size = size
                             if "randread" == operation:
                                 ioengine = "io_uring"
                                 runtime = "15"
+                                size = "128z"
 
                             if "read" == operation or "write" == operation:
                                 extra = " --offset_increment=%s --numjobs=%s --group_reporting "  % (size, queue_depth)
@@ -268,6 +273,7 @@ class Run(Bench):
                                         " --output output/%s.log") % (operation, size, ramptime, runtime, output_name)
                             fio_param = "%s %s" % (init_param, exec_param)
 
+                            size = original_size
                             self.run_cmd(dev, container, 'fio', fio_param)
                             print("Finished job")
 
