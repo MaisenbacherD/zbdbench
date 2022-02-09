@@ -66,7 +66,6 @@ def check_and_disable_scheduler(dev):
 
     print("Check OK: %s has been configured to use the 'none' scheduler" % dev)
 
-
 def check_dev_string(dev):
     m = re.search('^/dev/\w+$', dev)
 
@@ -127,7 +126,7 @@ def list_benchs(benches):
     for b in benches:
         print("  " + b.id())
 
-def run_benchmarks(dev, container, benches, run_output):
+def run_benchmarks(dev, container, benches, run_output, none_scheduler):
     if not dev:
         print('No device name provided for benchmark')
         print('ex. run.py /dev/nvmeXnY')
@@ -136,8 +135,10 @@ def run_benchmarks(dev, container, benches, run_output):
     # Verify that we're not about to destroy data unintended.
     check_dev_string(dev)
     check_dev_mounted(dev)
-    #check_and_set_scheduler(dev)
-    check_and_disable_scheduler(dev)
+    if none_scheduler:
+        check_and_disable_scheduler(dev)
+    else:
+        check_and_set_scheduler(dev)
     check_dev_zoned(dev)
     check_missing_programs(container, benches)
 
@@ -211,6 +212,7 @@ def main(argv):
     parser.add_argument('--container', '-c', type=str, default='docker', choices=['docker', 'system'], help='Use containerized binaries (docker) or system binaries (system)')
     parser.add_argument('--benchmarks', '-b', type=str, nargs='+', metavar='NAME', help='Benchmarks to run')
     parser.add_argument('--output', '-o', type=str, default=os.getcwd(), help='Directory to place results. Will be created if it does not exist')
+    parser.add_argument('--none-scheduler', action='store_true', help='Use none scheduler instead of mq-deadline.')
     args = parser.parse_args()
 
     dev = args.dev
@@ -218,6 +220,7 @@ def main(argv):
     output_path = args.output
     benches = base_benches
     run = ''
+    none_scheduler = args.none_scheduler
 
     if args.help:
         parser.print_help()
@@ -263,7 +266,7 @@ def main(argv):
     elif run == 'report':
         run_reports(report_path, benches)
     elif run == 'bench':
-        run_benchmarks(dev, container, benches, run_output)
+        run_benchmarks(dev, container, benches, run_output, none_scheduler)
     else:
         print_help()
 

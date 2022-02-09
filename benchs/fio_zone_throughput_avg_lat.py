@@ -3,18 +3,20 @@ import csv
 import sys
 import glob
 import re
+import math
 import matplotlib.pyplot as plt
 from .base import base_benches, Bench, Plot
 from benchs.base import is_dev_zoned
 
 operation_list = ["read", "randread", "write"]
-max_open_zones_list = [1, 2, 4, 8, 14, 16, 32, 64]
-max_open_zones_list = [1, 2, 4, 8, 14]
-#max_open_zones_list = range(1,33)
+number_parallel_jobs_list = [1, 2, 4, 8, 14, 16, 32, 64]
 queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
-#queue_depth_list = range(1,33)
 block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
 block_size_K_list = [str(x[:-1]) for x in block_size_list]
+fio_runtime = "30"
+fio_ramptime = "15"
+runs = 1
+size = "9z"
 
 class BenchPlot(Plot):
     def __init__(self, csv_file):
@@ -41,7 +43,7 @@ class BenchPlot(Plot):
             plt.ylabel(value_of_interest)
             self.saveInOutputDir(("%s_%s.pdf" % (value_of_interest, operation)))
 
-    def generateBlockSizeGraph(self, operation, max_open_zones_list, value_of_interest):
+    def generateBlockSizeGraph(self, operation, number_parallel_jobs_list, value_of_interest):
         self.resetPlot()
         benchmarkRows = csv.DictReader(open(self.csv_file))
 
@@ -57,7 +59,7 @@ class BenchPlot(Plot):
         y_values_QD32 = [-1] * len(x_ticks)
         y_values_QD64 = [-1] * len(x_ticks)
         for row in benchmarkRows:
-            if row['operation'] == operation and row['max_open_zones'] in  max_open_zones_list:
+            if row['operation'] == operation and row['number_parallel_jobs'] in  number_parallel_jobs_list:
                 if row['queue_depth'] == "1":
                     y_values_QD1[x_ticks.index(row['block_size_K'])] = int(row[value_of_interest])
                 elif row['queue_depth'] == "2":
@@ -81,7 +83,7 @@ class BenchPlot(Plot):
         plt.xticks(x_values, x_ticks)
         label_additions = ""
         if "write" in operation:
-            label_additions = ", max_open_zones=QD"
+            label_additions = ", Number of parallel jobs=QD"
 
         if -1 not in y_values_QD1:
             plt.plot(x_values, y_values_QD1, '-mo', label=("QD=1%s" % label_additions) )
@@ -174,74 +176,76 @@ class Run(Bench):
         return super().required_container_tools() |  {'fio'}
 
     def run(self, dev, container):
+        global fio_runtime
+        global fio_ramptime
         extra = ''
 
-        if is_dev_zoned(dev):
-            # Zone Capacity (52% of zone size)
-            zonecap=52
-            zonesize=self.get_zone_size_mb(dev)
-        else:
+        if not is_dev_zoned(dev):
             print("This test is ment to be run on a zoned dev")
             sys.exit(1)
 
-        #write/read 2 zones for this benchmark
-        size = "9z"
-        runs = 1
+        dev_number_zones = self.get_number_of_zones(dev)
         dev_max_open_zones = self.get_number_of_max_open_zones(dev)
+        number_prep_jobs = 2.0
+        increment_size = str(int(math.ceil(int(size[:-1])/number_prep_jobs)))
+        if dev_number_zones < (int(increment_size) * number_prep_jobs):
+            print("The provided device has not enough space to prepare it for the given workload size")
+            sys.exit(1)
+
+        max_used_zones = max(dev_max_open_zones, max(number_parallel_jobs_list))
+        if dev_number_zones < max_used_zones * int(size[:-1]):
+            print("The provided device has not enough space to run the benchmark for the given workload size")
+            sys.exit(1)
 
         for operation in operation_list:
-            tmp_max_open_zones_list = max_open_zones_list
+            tmp_number_parallel_jobs_list = number_parallel_jobs_list
 
             if "read" in operation:
-                tmp_max_open_zones_list = [1]
+                tmp_number_parallel_jobs_list = [1]
                 extra = ''
                 print("About to prep the drive for read job")
                 self.discard_dev(dev)
                 init_param = ("--ioengine=psync --direct=1 --zonemode=zbd"
                             " --output-format=json"
                             " --filename=%s "
-                            " --offset_increment=4z --job_max_open_zone=1 --max_open_zones=14 --numjobs=32 --group_reporting"
+                            " --offset_increment=%sz --job_max_open_zone=1 --max_open_zones=%s --numjobs=%s --group_reporting"
                             " --rw=write --bs=128K"
-                            " %s") %  (dev, extra)
+                            " %s") %  (dev, increment_size, dev_max_open_zones, str(int(number_prep_jobs)), extra)
 
                 prep_param = ("--name=prep "
-                            " --size=%s"
-                            " --output output/%s_prep.log") % (str("4z"), operation)
+                            " --size=%sz"
+                            " --output output/%s_prep.log") % (increment_size, operation)
 
                 fio_param = "%s %s" % (init_param, prep_param)
 
                 self.run_cmd(dev, container, 'fio', fio_param)
                 print("Finished preping the drive")
 
-            for max_open_zones in tmp_max_open_zones_list:
+            for number_parallel_jobs in tmp_number_parallel_jobs_list:
 
                 for queue_depth in queue_depth_list:
-                    if max_open_zones > queue_depth:
+                    if number_parallel_jobs > queue_depth:
                         continue
 
-                    if max_open_zones > dev_max_open_zones:
+                    if number_parallel_jobs > dev_max_open_zones:
                         continue
 
-                    if "write" in operation and queue_depth > max_open_zones:
+                    if "write" in operation and queue_depth > number_parallel_jobs:
                         continue
 
                     for block_size in block_size_list:
                         for run in range(1, runs+1):
                             extra = ''
-                            output_name = ("%s-%s-%s-%s-%s-%sof%s") % (operation, max_open_zones, queue_depth, block_size, self.jobname, run, runs)
+                            output_name = ("%s-%s-%s-%s-%s-%sof%s") % (operation, number_parallel_jobs, queue_depth, block_size, self.jobname, run, runs)
 
-                            ioengine = "psync"
-                            runtime = "30"
-                            ramptime = "15"
+                            ioengine = "io_uring"
+
                             extra = " --iodepth=%s " % queue_depth
                             if "randread" == operation:
-                                ioengine = "io_uring"
-                                runtime = "15"
-
-                            if "read" == operation:
-                                ioengine = "io_uring"
+                                fio_runtime = "15"
 
                             if "write" == operation:
+                                ioengine = "psync"
                                 extra = " --offset_increment=%s --job_max_open_zone=1 --numjobs=%s --group_reporting "  % (size, queue_depth)
 
                             print("About to start job %s" % output_name)
@@ -253,14 +257,14 @@ class Run(Bench):
                                         " --max_open_zones=%s"
                                         " --filename=%s"
                                         " --rw=%s --bs=%s"
-                                        " %s") % (ioengine, max_open_zones, dev, operation, block_size, extra)
+                                        " %s") % (ioengine, dev_max_open_zones, dev, operation, block_size, extra)
 
                             exec_param = ("--name=%s "
                                         " --size=%s"
                                         " --time_based"
                                         " --ramp_time=%s --runtime=%s"
                                         " --percentile_list=1:5:10:20:30:40:50:60:70:80:90:99:99.9:99.99:99.999:99.9999:99.99999:100"
-                                        " --output output/%s.log") % (operation, size, ramptime, runtime, output_name)
+                                        " --output output/%s.log") % (operation, size, fio_ramptime, fio_runtime, output_name)
                             fio_param = "%s %s" % (init_param, exec_param)
 
                             self.run_cmd(dev, container, 'fio', fio_param)
@@ -333,7 +337,7 @@ class Run(Bench):
                     globalOptions = data['global options']
                     csv_row = []
                     csv_row.append(options[0])
-                    csv_row.append(globalOptions['max_open_zones'])
+                    csv_row.append(globalOptions['number_parallel_jobs'])
                     iodepth = int(1)
                     if 'iodepth' in globalOptions:
                         iodepth = int(globalOptions['iodepth'])
@@ -408,7 +412,7 @@ class Run(Bench):
         csv_file = path + "/" + self.jobname + ".csv"
         with open(csv_file, 'w') as f:
             w = csv.writer(f, delimiter=',')
-            w.writerow(['operation', 'max_open_zones', 'queue_depth', 'block_size_K', 'avg_lat_us', 'throughput_MiBs', 'clat_p1_us', 'clat_p5_us', 'clat_p10_us', 'clat_p20_us', 'clat_p30_us', 'clat_p40_us', 'clat_p50_us', 'clat_p60_us', 'clat_p70_us', 'clat_p80_us', 'clat_p90_us', 'clat_p99_us', 'clat_p99.9_us', 'clat_p99.99_us', 'clat_p99.999_us', 'clat_p99.9999_us', 'clat_p99.99999_us', 'clat_p100_us'])
+            w.writerow(['operation', 'number_parallel_jobs', 'queue_depth', 'block_size_K', 'avg_lat_us', 'throughput_MiBs', 'clat_p1_us', 'clat_p5_us', 'clat_p10_us', 'clat_p20_us', 'clat_p30_us', 'clat_p40_us', 'clat_p50_us', 'clat_p60_us', 'clat_p70_us', 'clat_p80_us', 'clat_p90_us', 'clat_p99_us', 'clat_p99.9_us', 'clat_p99.99_us', 'clat_p99.999_us', 'clat_p99.9999_us', 'clat_p99.99999_us', 'clat_p100_us'])
             w.writerows(csv_data)
 
         print("  Output written to: %s" % csv_file)
@@ -421,8 +425,8 @@ class Run(Bench):
             plot.generateBarGraph(operation, "avg_lat_us")
 
             if "write" in operation:
-                plot.generateBlockSizeGraph(operation, [str(x) for x in max_open_zones_list], "throughput_MiBs")
-                plot.generateBlockSizeGraph(operation, [str(x) for x in max_open_zones_list], "avg_lat_us")
+                plot.generateBlockSizeGraph(operation, [str(x) for x in number_parallel_jobs_list], "throughput_MiBs")
+                plot.generateBlockSizeGraph(operation, [str(x) for x in number_parallel_jobs_list], "avg_lat_us")
 
             if "read" in operation:
                 plot.generateBlockSizeGraph(operation, ["1"], "throughput_MiBs")
@@ -430,11 +434,11 @@ class Run(Bench):
 
             for block_size_K in block_size_K_list:
                 if "read" in operation:
-                    plot.generatePercentileGraph({"operation": operation, "block_size_K": block_size_K, "max_open_zones": "1"})
+                    plot.generatePercentileGraph({"operation": operation, "block_size_K": block_size_K, "number_parallel_jobs": "1"})
 
-                for max_open_zones in max_open_zones_list:
+                for number_parallel_jobs in number_parallel_jobs_list:
                     if "write" in operation:
-                        plot.generatePercentileGraph({"operation": operation, "block_size_K": block_size_K, "max_open_zones": str(max_open_zones)})
+                        plot.generatePercentileGraph({"operation": operation, "block_size_K": block_size_K, "number_parallel_jobs": str(number_parallel_jobs)})
 
                 tmp_queue_depth_list = queue_depth_list
                 if "read" in operation:
