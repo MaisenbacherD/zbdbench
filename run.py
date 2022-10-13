@@ -137,7 +137,7 @@ def list_benchs(benches):
 def collect_results_in_mysql(results_dir):
     mysql_env_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "recipes", "docker-compose", ".env")
     if not os.path.exists(mysql_env_file_path):
-           print("Skipping result collection. No MySQL environment (%s) found. Please refer to the README.md" % mysql_env_file_path)
+           print("Skipping optional result collection. No MySQL environment (%s) found. Please refer to the README.md if you want to enable this feature." % mysql_env_file_path)
            return
     print("Starting to collect results into the configured MySQL instance.")
     from data_collector import mysql_data_collector

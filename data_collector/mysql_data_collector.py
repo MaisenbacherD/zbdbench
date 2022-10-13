@@ -86,6 +86,13 @@ class DatabaseConnection(object):
             pass
         return benchmark_call
 
+    def get_benchmark_name(self, results_dir):
+        benchmark_call = self.get_benchmark_call(results_dir)
+        benchmark_name_and_other_options = benchmark_call.split(" -b ")
+        if len(benchmark_name_and_other_options) < 2:
+            return ""
+        return benchmark_name_and_other_options.split(" ")[0]
+
     def exec_mysql_query_notes_disabled(self, query):
         self.mysql_cursor.execute("SET sql_notes = 0; ")
         self.mysql_cursor.execute(query)
@@ -135,6 +142,14 @@ class DatabaseConnection(object):
                     self.data_table))
         self.exec_mysql_query_notes_disabled(query)
 
+    def create_benchmark_table_if_not_exists(self, benchmark_name):
+        #TODO: Add Indexes
+        query = ("CREATE TABLE IF NOT EXISTS `%s`.`%s`("
+                 "`_id` INT UNSIGNED NOT NULL auto_increment, "
+                 "`json_file` NVARCHAR(MAX), PRIMARY KEY(`_id`));"
+                 % (self.database_name, benchmark_name))
+        self.exec_mysql_query_notes_disabled(query)
+
     def insert_new_files_entry(self, data):
         table_fields = ", ".join(self.files_table_fields)
         values = ""
@@ -179,9 +194,16 @@ class DatabaseConnection(object):
         return dataframe.to_dict('records')[0]
 
     def insert_json_as_benchmark_entry(self, json_data):
-        data = self.convert_json_to_flat_dict(json_data)
-        data = self.clean_dict_data_for_mysql(data)
-        self.insert_entry_in_database(data)
+        #data = self.convert_json_to_flat_dict(json_data)
+        #data = self.clean_dict_data_for_mysql(data)
+        #self.insert_entry_in_database(data)
+        print('New implementation')
+        #I think we should collect the json files of each benchmark in a separate table. In that way we can craft specific queries for different benchmarks easily.
+        #TODO: get benchmark_name out of the json
+        self.create_benchmark_table_if_not_exists(json_data['zbdbench_benchmark_name'])
+        #Insert str(json_data)
+
+
 
     def collect_json_results_from_directory(self, results_dir):
         if not os.path.isdir(results_dir):
@@ -204,6 +226,7 @@ class DatabaseConnection(object):
                 json_data['zbdbench_device_serial'] = self.get_device_serial(results_dir)
                 json_data['zbdbench_device_fw'] = self.get_device_fw(results_dir)
                 json_data['zbdbench_benchmark_call'] = self.get_benchmark_call(results_dir)
+                json_data['zbdbench_benchmark_name'] = self.get_benchmark_name(results_dir)
                 self.insert_json_as_benchmark_entry(json_data)
 
 if __name__ == "__main__":

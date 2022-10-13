@@ -77,6 +77,10 @@ Overwrite benchmark run with the none device scheduler:
 Overwrite benchmark run with the mq-deadline device scheduler:
 
     ./run.py -b benchmark -d /dev/nvmeXnY --mq-deadline-scheduler
+    
+Collect benchmark results in a MySQL database:
+
+    ./run.py --collect-results output/YYYYMMDDHHMMSS
 
 MySQL data collector
 ----------------------
