@@ -9,9 +9,12 @@ from .base import base_benches, Bench, Plot, DeviceScheduler
 from benchs.base import is_dev_zoned
 
 operation_list = ["read", "randread", "write"]
-number_parallel_jobs_list = [1, 2, 4, 8, 14, 16, 32, 64, 128]
-queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
-block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
+#number_parallel_jobs_list = [1, 2, 4, 8, 14, 16, 32, 64, 128]
+number_parallel_jobs_list = [1, 8, 16, 128]
+#queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
+queue_depth_list = [1, 8, 16, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
+#block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
+block_size_list = ["4K", "16K", "128K"]
 block_size_K_list = [str(x[:-1]) for x in block_size_list]
 fio_runtime = "30"
 fio_ramptime = "15"
@@ -193,7 +196,7 @@ class Run(Bench):
             sys.exit(1)
 
         dev_number_zones = self.get_number_of_zones(dev)
-        dev_max_open_zones = self.get_number_of_max_open_zones(dev)
+        dev_max_open_zones = 14 #self.get_number_of_max_open_zones(dev)
 
         max_parallel_jobs = max(dev_max_open_zones, max(number_parallel_jobs_list))
         if dev_number_zones < max_parallel_jobs * int(size[:-1]):

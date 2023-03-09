@@ -62,7 +62,7 @@ def check_and_set_none_scheduler(dev):
     with open('/sys/block/%s/queue/scheduler'% devname, 'r') as f:
         res = f.readline()
 
-    if "[none]" not in res:
+    if "none" not in res:
         print("Check FAIL: %s does not support none scheduler" % dev)
         sys.exit(1)
 
@@ -252,7 +252,7 @@ def main(argv):
     group.add_argument('--help', '-h', action='store_true', help='Print help message and exit')
     parser.add_argument('--container', '-c', type=str, default='yes', choices=['yes', 'no'], help='Use containerized binaries or system binaries')
     parser.add_argument('--benchmarks', '-b', type=str, nargs='+', metavar='NAME', help='Benchmarks to run')
-    parser.add_argument('--output', '-o', type=str, default=os.path.join(os.getcwd(), 'zbdbench_results'), help='Directory to place results. Will be created if it does not exist')
+    parser.add_argument('--output', '-o', type=str, default=os.path.join(os.getcwd(), 'output'), help='Directory to place results. Will be created if it does not exist')
     scheduler_group = parser.add_mutually_exclusive_group(required=False)
     scheduler_group.add_argument('--none-scheduler', action='store_true', help='Use none scheduler for the given drive.')
     scheduler_group.add_argument('--mq-deadline-scheduler', action='store_true', help='Use mq-deadline scheduler for the given drive.')
