@@ -14,7 +14,7 @@ number_parallel_jobs_list = [1, 8, 16, 128]
 #queue_depth_list = [1, 2, 4, 8, 14, 16, 32, 64, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 queue_depth_list = [1, 8, 16, 128] #attention when adjusting: hardcoded sections in generateBlockSizeGraph
 #block_size_list = ["4K", "8K", "16K", "32K", "64K", "128K"]
-block_size_list = ["4K", "16K", "128K"]
+block_size_list = ["4K", "16K", "64K"]
 block_size_K_list = [str(x[:-1]) for x in block_size_list]
 fio_runtime = "30"
 fio_ramptime = "15"
@@ -222,7 +222,7 @@ class Run(Bench):
                             " --output-format=json"
                             " --filename=%s "
                             " --offset_increment=%sz --job_max_open_zone=1 --max_open_zones=%s --numjobs=%s --group_reporting"
-                            " --rw=write --bs=128K"
+                            " --rw=write --bs=64K"
                             " %s") %  (dev, increment_size, dev_max_open_zones, str(int(number_prep_jobs)), extra)
 
                 prep_param = ("--name=prep "
